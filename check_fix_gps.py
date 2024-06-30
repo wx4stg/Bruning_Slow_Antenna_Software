@@ -18,16 +18,23 @@ def exit_handler():
 
 atexit.register(exit_handler)
 
+# We need to wait a few seconds after a fresh boot for gpsd to figure its life out
+sleep(6)
 current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
 print(f'[{current_time}] Starting scheduled GPS fix...')
+
+
+with open('/home/pi/Desktop/last_gps.txt', 'w') as f:
+    f.write('NO_FIX_2Donly_NaT')
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(26, GPIO.OUT)
+GPIO.output(26, GPIO.LOW)
 
 # Connect to gpsd instance, init variables, turn off status LED during check
 gpsd.connect()
 last_sentence = None
 alt = '2Donly'
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(26, GPIO.OUT)
-GPIO.output(26, GPIO.LOW)
 
 # Define some commands that we'll run later
 start_clock_cmd = ['systemctl', 'start', 'update_clock_gps']
@@ -42,7 +49,9 @@ while True:
 
     # Get latest NMEA sentence from gpsd
     sentence = gpsd.get_current()
-
+    # Sometimes there can be sentences with empty time data -- filter these out:
+    if sentence.time == '':
+        continue
     # If the last sentence exists, check to see if the sentence we just grabbed matches the previous
     if last_sentence is not None:
         if last_sentence.time == sentence.time:
@@ -82,6 +91,7 @@ while True:
                     print(f'[{current_time}] Clock is reasonable, proceeding')
                     while True:
                         if subprocess.run(check_test_cmd, stdout=subprocess.DEVNULL).returncode != 0:
+                            current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
                             print(f'[{current_time}] ADC test startup not active, starting data collect!')
                             subprocess.run(start_data_cmd, stdout=subprocess.DEVNULL)
                             GPIO.output(26, GPIO.HIGH)
