@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Monitor the GPS and time sync of the slow antenna
+# Created 25 January 2024 by Sam Gardner <samuel.gardner@ttu.edu>
 
 import sys
 import errno
@@ -7,69 +9,94 @@ from time import sleep
 import datetime
 import RPi.GPIO as GPIO
 import subprocess
+import gpsd
+import atexit
+
+def exit_handler():
+    GPIO.output(26, GPIO.LOW)
+    GPIO.cleanup()
+
+atexit.register(exit_handler)
 
 current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-print(f'[{current_time}] Checking GPS fix...')
+print(f'[{current_time}] Starting scheduled GPS fix...')
+
+# Connect to gpsd instance, init variables, turn off status LED during check
+gpsd.connect()
+last_sentence = None
+alt = '2Donly'
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(26, GPIO.OUT)
 GPIO.output(26, GPIO.LOW)
 
+# Define some commands that we'll run later
 start_clock_cmd = ['systemctl', 'start', 'update_clock_gps']
 check_clock_cmd = ['systemctl', 'status', 'update_clock_gps']
 check_test_cmd = ['systemctl', 'status', 'adc_test_startup']
 check_data_cmd = ['systemctl', 'status', 'adc_data_collect']
 start_data_cmd = ['systemctl', 'start', 'adc_data_collect']
 
-try:
-    while True:
+# Loop indefinitely
+while True:
+    current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+
+    # Get latest NMEA sentence from gpsd
+    sentence = gpsd.get_current()
+
+    # If the last sentence exists, check to see if the sentence we just grabbed matches the previous
+    if last_sentence is not None:
+        if last_sentence.time == sentence.time:
+            # If the time of the last sentence as over one minute ago, flash the GPS status light at once per 1/4 sec
+            if (datetime.datetime.utcnow() - datetime.datetime.strptime(sentence.time[:-5], '%Y-%m-%dT%H:%M:%S')).total_seconds() >= 60:
+                GPIO.output(26, not GPIO.input(26))
+                alt = '2Donly'
+            # Wait 1/4 sec before trying again for a new packet
+            sleep(0.25)
+            continue
+    last_sentence = sentence
+    # If this is is a new packet, make sure it's not a 'NO FIX packet'
+    if sentence.mode >= 2:
+        # Grab the longitude and latitude (and altitude, if available)
+        lon = sentence.lon
+        lat = sentence.lat
+        if sentence.mode == 3:
+            alt = sentence.alt
+        # Grab the received time and convert to a python datetime object
+        sentence_time_str = sentence.time[:-5]
+        sentence_time = datetime.datetime.strptime(sentence_time_str, '%Y-%m-%dT%H:%M:%S')
         current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-        print(f'[{current_time}] Still waiting for fix...')
-        # intended to have gpspipe -w piped to stdin
-        line = sys.stdin.readline()
-        if not line:
-            # parent proc is dead, exit
-            break
-        # read json gpspipe data
-        sentence = json.loads(line)
-        current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-        print(f'[{current_time}] Received Sentence: {sentence}')
-        # Filter to mode 2 (2d fix) and mode 3 (3d fix)
-        if sentence['class'] == 'TPV':
-            if sentence['mode'] == 2  or sentence['mode'] == 3:
-                if 'time' not in sentence.keys():
-                    continue
-                sentence_time = datetime.datetime.strptime(sentence['time'][:-5], '%Y-%m-%dT%H:%M:%S')
-                current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-                print(f'[{current_time}] GPS fixed, updating clock')
-                subprocess.run(start_clock_cmd, stdout=subprocess.DEVNULL)
-                while True:
+        print(f'[{current_time}] GPS packet: {lat}, {lon}, {alt}, {sentence_time_str}, updating clock')
+        with open('/home/pi/Desktop/last_gps.txt', 'w') as f:
+            f.write(f'{lat:.3f}_{lon:.3f}_{alt}_{sentence_time_str}')
+        # Force the system clock to update now
+        subprocess.run(start_clock_cmd, stdout=subprocess.DEVNULL)
+        # Now check to see if adc_data_collect needs to be started.
+        if subprocess.run(check_data_cmd, stdout=subprocess.DEVNULL).returncode != 0:
+            # Non-zero exit, adc_data_collect needs to be started
+            while True:
+                # Since it takes a moment to grab the info from the GPS packet, the system clock should always be AHEAD of the received packet time
+                # ...unless the system just rebooted and the time hasn't updated yet, in which case, we want to wait for the system clock to update before
+                # starting data collect. This makes sure that the system clock is up to date before proceeding.
+                if (sentence_time - datetime.datetime.utcnow()).total_seconds() <= 10:
+                    current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+                    print(f'[{current_time}] Clock is reasonable, proceeding')
+                    while True:
+                        if subprocess.run(check_test_cmd, stdout=subprocess.DEVNULL).returncode != 0:
+                            print(f'[{current_time}] ADC test startup not active, starting data collect!')
+                            subprocess.run(start_data_cmd, stdout=subprocess.DEVNULL)
+                            GPIO.output(26, GPIO.HIGH)
+                            break
+                        else:
+                            current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+                            print(f'[{current_time}] ADC test startup active, waiting')
+                            sleep(1)
+                            continue
+                    break
+                else:
+                    current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
                     print(f'[{current_time}] GPS is ahead of system clock by {(sentence_time - datetime.datetime.utcnow()).total_seconds()} s')
-                    if (sentence_time - datetime.datetime.utcnow()).total_seconds() <= 10:
-                        current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-                        print(f'[{current_time}] Clock updated successfully')
-                        while True:
-                            if subprocess.run(check_test_cmd, stdout=subprocess.DEVNULL).returncode != 0:
-                                print(f'[{current_time}] ADC test startup not active')
-                                if subprocess.run(check_data_cmd, stdout=subprocess.DEVNULL).returncode != 0:
-                                    print(f'[{current_time}] Starting data collect!')
-                                    subprocess.run(start_data_cmd, stdout=subprocess.DEVNULL)
-                                else:
-                                    print(f'[{current_time}] Data collect already running.')
-                                GPIO.output(26, GPIO.HIGH)
-                                break
-                            else:
-                                current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-                                print(f'[{current_time}] ADC test startup active, waiting')
-                                sleep(1)
-                        break
-                    else:
-                        current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-                        print(f'[{current_time}] Clock not yet updated, waiting...')
-                        sleep(1)
-                break
-except IOError as e:
-    # this was stolen from stackoverflow and probably has a good reason to be here
-    if e.errno == errno.EPIPE:
-        pass
-    else:
-        raise e
+                    sleep(0.25)
+        else:
+            # ADC data collect already running
+            GPIO.output(26, GPIO.HIGH)
+    sleep(0.25)
