@@ -5,12 +5,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import struct
 import atexit
+from datetime import datetime
 
 def exit_handler():
+    current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+    print(f'[{current_time}] ADC test exiting.')
     GPIO.cleanup()
 
 atexit.register(exit_handler)
 
+current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+print(f'[{current_time}] --------------------Starting ADC test--------------------')
 
 def convert_adc_to_decimal(value):
     modulo = 1 << 24
@@ -148,3 +153,7 @@ plt.show()
 GPIO.output(pin_relay_a, GPIO.LOW)
 GPIO.output(pin_relay_b, GPIO.LOW)
 GPIO.output(pin_relay_c, GPIO.LOW)
+
+
+current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+print(f'[{current_time}] ADC test succeeded.')

@@ -8,6 +8,8 @@ WorkingDirectory=/home/pi/Desktop
 RuntimeMaxSec=20
 User=pi
 SyslogIdentifier=adc_test_startup
+StandardError=append:/home/pi/Desktop/SA_log.out
+StandardOutput=append:/home/pi/Desktop/SA_log.out
 
 [Install]
 WantedBy=multi-user.target
