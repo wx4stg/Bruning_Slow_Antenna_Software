@@ -4,6 +4,13 @@ from time import sleep
 import numpy as np
 import matplotlib.pyplot as plt
 import struct
+import atexit
+
+def exit_handler():
+    GPIO.cleanup()
+
+atexit.register(exit_handler)
+
 
 def convert_adc_to_decimal(value):
     modulo = 1 << 24
@@ -141,5 +148,3 @@ plt.show()
 GPIO.output(pin_relay_a, GPIO.LOW)
 GPIO.output(pin_relay_b, GPIO.LOW)
 GPIO.output(pin_relay_c, GPIO.LOW)
-
-GPIO.cleanup()
