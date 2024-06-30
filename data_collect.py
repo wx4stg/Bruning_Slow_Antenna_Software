@@ -6,18 +6,52 @@ import numpy as np
 import struct
 import datetime
 import os.path
-from os import listdir
+from os import listdir, rename
+import threading
+import atexit
+
+def exit_handler():
+    GPIO.cleanup()
+
+atexit.register(exit_handler)
 
 use_relay = 'a'
 mins_before_write = 1
 save_path ='/home/pi/Desktop/DATA/' 
 
 
+def add_gps_info_to_file(start_time, bytes_data):
+    global save_path
+    global cpu_id
+    global use_relay
+    global write_success
+    last_gps = 'NO_FIX_2Donly_NaT'
+    if os.path.exists('/home/pi/Desktop/last_gps.txt'):
+        with open('/home/pi/Desktop/last_gps.txt', 'r') as f:
+            last_gps = f.read()
+        last_gps_split = last_gps.split('_')
+        try:
+            last_gps_time_offset = (datetime.datetime.utcnow() - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S')).total_seconds()
+        except ValueError:
+            last_gps_time_offset = 0
+        last_gps_split[-1] = f'{last_gps_time_offset:.2f}'
+        last_gps = '_'.join(last_gps_split)
+    name = os.path.join(save_path, f'{start_time.strftime("%Y%m%d_%H%M%S_%f")}_{last_gps}_{cpu_id}_{use_relay}.raw')
+    with open(name, mode='wb') as file:
+        file.write(bytes_data)
+    write_success = True
+    print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Data collect wrote file: {name}')
+
+cpu_id = ''
+with open('/proc/cpuinfo', 'r') as f:
+    cpu_id = f.readlines()[-2].replace('\n', '')[-8:]
+
+
 
 write_success = False
 for file in reversed(sorted(listdir(save_path))):
     try:
-        this_file_dt = datetime.datetime.strptime(file.split('_')[0], '%Y%m%d%H%M%S')
+        this_file_dt = datetime.datetime.strptime('_'.join(file.split('_')[0:2]), '%Y%m%d_%H%M%S')
     except Exception as e:
         print(str(e))
         continue
@@ -68,8 +102,8 @@ SERIAL_SPEED = 2000000
 def do_run(bytes_to_read=38880000000):
     global write_success
     global pin_LED_status
-    stamp = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S_%f") 
-    print(stamp)    
+    start_time = datetime.datetime.utcnow()
+    print(f'[{start_time.strftime("%Y-%m-%d %H:%M:%S.%f")}] data_collect do_run()!')
     ser = serial.Serial('/dev/ttyACM0', SERIAL_SPEED, timeout=1)
     ser.flush()
     bytes_read = 0
@@ -90,21 +124,11 @@ def do_run(bytes_to_read=38880000000):
                 GPIO.output(pin_LED, GPIO.HIGH)
             pin_LED_status += 1
         if (byte_count_since_last_write >= bytes_before_write): #27000000):
-            print('writing file')
-            if stamp is not None:
-                name = os.path.join(save_path,stamp + '_' + use_relay + '.raw')
-                with open(name, mode='wb') as file:
-                    file.write(bytes_data)
-                stamp = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S_%f") #None
-            else:
-                name = os.path.join(save_path,datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S_%f") + '_' + use_relay + '.raw')
-                with open(name, mode='wb') as file:
-                    file.write(bytes_data)
-            print(name)
-            write_success = True
+            threading.Thread(target=add_gps_info_to_file, args=(start_time, bytes_data)).start()
             bytes_data = bytearray()
             byte_count_since_last_write = 0
-            print(ser.in_waiting)
+            print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Bytes in input buffer: {ser.in_waiting}')
+            start_time = datetime.datetime.utcnow()
         #bytes_read += 1
         bytes_read += bytes_available
         byte_count_since_last_write += bytes_available
@@ -146,7 +170,6 @@ sleep(2)
 ba = do_run()
 #ba = bytearray(ba)
 #print(ba)
-print(type(ba))
 
 data_start_bytes = []
 data_packet_length = 8
@@ -176,17 +199,12 @@ adc_ready = np.array(adc_ready)
 adc = np.array(adc)
 end = np.array(end)
 
-print(adc.shape, adc.dtype)
+# print(adc.shape, adc.dtype)
 delta_t_adc = (adc_ready[-1]-adc_ready[0])*1e-6
 sample_rate = adc_ready.shape[0]/delta_t_adc
-print(f"Elapsed time {delta_t_adc:6.3} s with sample rate {sample_rate:6.1f} Hz")
-
-name = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S") + '_' + use_relay + '.txt'
-
-print('done with file')
+print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Elapsed time {delta_t_adc:6.3} s with sample rate {sample_rate:6.1f} Hz')
 
 GPIO.output(pin_relay_a, GPIO.LOW)
 GPIO.output(pin_relay_b, GPIO.LOW)
 GPIO.output(pin_relay_c, GPIO.LOW)
 
-GPIO.cleanup()
