@@ -20,7 +20,7 @@ mins_before_write = 1
 save_path ='/home/pi/Desktop/DATA/' 
 
 
-def add_gps_info_to_file(start_time, bytes_data):
+def write_file(start_time, bytes_data):
     global save_path
     global cpu_id
     global use_relay
@@ -124,7 +124,7 @@ def do_run(bytes_to_read=38880000000):
                 GPIO.output(pin_LED, GPIO.HIGH)
             pin_LED_status += 1
         if (byte_count_since_last_write >= bytes_before_write): #27000000):
-            threading.Thread(target=add_gps_info_to_file, args=(start_time, bytes_data)).start()
+            threading.Thread(target=write_file, args=(start_time, bytes_data)).start()
             bytes_data = bytearray()
             byte_count_since_last_write = 0
             print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Bytes in input buffer: {ser.in_waiting}')
