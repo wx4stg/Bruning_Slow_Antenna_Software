@@ -104,7 +104,11 @@ def do_run(bytes_to_read=38880000000):
     global pin_LED_status
     start_time = datetime.datetime.utcnow()
     print(f'[{start_time.strftime("%Y-%m-%d %H:%M:%S.%f")}] data_collect do_run()!')
-    ser = serial.Serial('/dev/ttyACM0', SERIAL_SPEED, timeout=1)
+    try:
+        ser = serial.Serial('/dev/ttyACM0', SERIAL_SPEED, timeout=1)
+    except Exception as e:
+        if 'No such file or directory' in str(e):
+            system('sudo shutdown -h now')
     ser.flush()
     bytes_read = 0
     byte_count_since_last_write = 0
