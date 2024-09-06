@@ -2,7 +2,7 @@ import serial
 import RPi.GPIO as GPIO
 from time import sleep
 import numpy as np
-import matplotlib.pyplot as plt
+import sys
 import struct
 import atexit
 from datetime import datetime
@@ -134,21 +134,23 @@ print(adc.shape, adc.dtype)
 delta_t_adc = (adc_ready[-1]-adc_ready[0])*1e-6
 sample_rate = adc_ready.shape[0]/delta_t_adc
 print(f"Elapsed time {delta_t_adc:6.3} s with sample rate {sample_rate:6.1f} Hz")
-fig, axs = plt.subplots(2,2, sharex=True)
-axs[0,1].plot(adc_ready-adc_ready[0])
-axs[0,1].set_title('ADC ready microsecond')
+if '--plot' in sys.argv:
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(2,2, sharex=True)
+    axs[0,1].plot(adc_ready-adc_ready[0])
+    axs[0,1].set_title('ADC ready microsecond')
 
-axs[1,1].plot(adc)
-axs[1,1].set_title('ADC')
+    axs[1,1].plot(adc)
+    axs[1,1].set_title('ADC')
 
-axs[0,0].plot(starts)
-axs[0,0].set_title('Starts')
+    axs[0,0].plot(starts)
+    axs[0,0].set_title('Starts')
 
-axs[1,0].plot(end)
-axs[1,0].set_title('Ends')
+    axs[1,0].plot(end)
+    axs[1,0].set_title('Ends')
 
-#plt.plot(adc)
-plt.show()
+    #plt.plot(adc)
+    plt.show()
 
 GPIO.output(pin_relay_a, GPIO.LOW)
 GPIO.output(pin_relay_b, GPIO.LOW)
