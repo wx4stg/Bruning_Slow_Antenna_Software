@@ -31,7 +31,7 @@ def write_file(start_time, bytes_data):
             last_gps = f.read()
         last_gps_split = last_gps.split('_')
         try:
-            last_gps_time_offset = (datetime.datetime.utcnow() - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S')).total_seconds()
+            last_gps_time_offset = (datetime.datetime.now(UTC) - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S')).total_seconds()
         except ValueError:
             last_gps_time_offset = 0
         last_gps_split[-1] = f'{last_gps_time_offset:.2f}'
@@ -40,7 +40,7 @@ def write_file(start_time, bytes_data):
     with open(name, mode='wb') as file:
         file.write(bytes_data)
     write_success = True
-    print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Data collect wrote file: {name}')
+    print(f'[{datetime.datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")}] Data collect wrote file: {name}')
 
 cpu_id = ''
 with open('/proc/cpuinfo', 'r') as f:
@@ -55,7 +55,7 @@ for file in reversed(sorted(listdir(save_path))):
     except Exception as e:
         print(str(e))
         continue
-    if this_file_dt + datetime.timedelta(seconds=mins_before_write*60) > datetime.datetime.utcnow() - datetime.timedelta(seconds=mins_before_write*60+30):
+    if this_file_dt + datetime.timedelta(seconds=mins_before_write*60) > datetime.datetime.now(UTC) - datetime.timedelta(seconds=mins_before_write*60+30):
         write_success = True
         break
 bytes_before_write = 5400000*mins_before_write
@@ -102,7 +102,7 @@ SERIAL_SPEED = 2000000
 def do_run(bytes_to_read=38880000000):
     global write_success
     global pin_LED_status
-    start_time = datetime.datetime.utcnow()
+    start_time = datetime.datetime.now(UTC)
     print(f'[{start_time.strftime("%Y-%m-%d %H:%M:%S.%f")}] data_collect do_run()!')
     try:
         ser = serial.Serial('/dev/ttyACM0', SERIAL_SPEED, timeout=1)
@@ -131,8 +131,8 @@ def do_run(bytes_to_read=38880000000):
             threading.Thread(target=write_file, args=(start_time, bytes_data)).start()
             bytes_data = bytearray()
             byte_count_since_last_write = 0
-            print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Bytes in input buffer: {ser.in_waiting}')
-            start_time = datetime.datetime.utcnow()
+            print(f'[{datetime.datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")}] Bytes in input buffer: {ser.in_waiting}')
+            start_time = datetime.datetime.now(UTC)
         #bytes_read += 1
         bytes_read += bytes_available
         byte_count_since_last_write += bytes_available
@@ -206,7 +206,7 @@ end = np.array(end)
 # print(adc.shape, adc.dtype)
 delta_t_adc = (adc_ready[-1]-adc_ready[0])*1e-6
 sample_rate = adc_ready.shape[0]/delta_t_adc
-print(f'[{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")}] Elapsed time {delta_t_adc:6.3} s with sample rate {sample_rate:6.1f} Hz')
+print(f'[{datetime.datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")}] Elapsed time {delta_t_adc:6.3} s with sample rate {sample_rate:6.1f} Hz')
 
 GPIO.output(pin_relay_a, GPIO.LOW)
 GPIO.output(pin_relay_b, GPIO.LOW)

@@ -5,16 +5,16 @@ import numpy as np
 import sys
 import struct
 import atexit
-from datetime import datetime
+from datetime import datetime, UTC
 
 def exit_handler():
-    current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+    current_time = datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
     print(f'[{current_time}] ADC test exiting.')
     GPIO.cleanup()
 
 atexit.register(exit_handler)
 
-current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+current_time = datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
 print(f'[{current_time}] --------------------Starting ADC test--------------------')
 
 def convert_adc_to_decimal(value):
@@ -157,5 +157,5 @@ GPIO.output(pin_relay_b, GPIO.LOW)
 GPIO.output(pin_relay_c, GPIO.LOW)
 
 
-current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+current_time = datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
 print(f'[{current_time}] ADC test succeeded.')
