@@ -37,8 +37,7 @@ last_sentence = None
 alt = '2Donly'
 
 # Define some commands that we'll run later
-start_clock_cmd = ['systemctl', 'start', 'update_clock_gps']
-check_clock_cmd = ['systemctl', 'status', 'update_clock_gps']
+chrony_cmd = ['chronyc', 'sources']
 check_test_cmd = ['systemctl', 'status', 'adc_test_startup']
 check_data_cmd = ['systemctl', 'status', 'adc_data_collect']
 start_data_cmd = ['systemctl', 'start', 'adc_data_collect']
@@ -77,8 +76,15 @@ while True:
         print(f'[{current_time}] GPS packet: {lat}, {lon}, {alt}, {sentence_time_str}, updating clock')
         with open('/home/pi/Desktop/last_gps.txt', 'w') as f:
             f.write(f'{lat:.3f}_{lon:.3f}_{alt}_{sentence_time_str}')
-        # Force the system clock to update now
-        subprocess.run(start_clock_cmd, stdout=subprocess.DEVNULL)
+        # Check to make sure chrony is using PPS as a source for time updates
+        while True:
+            chrony_task = subprocess.Popen(chrony_cmd, stdout=subprocess.PIPE)
+            chrony_task.wait()
+            chrony_out = [l for l in chrony_task.stdout.read().decode('utf-8').split('\n') if 'PPS' in l][0]
+            if chrony_out.startswith('#*'):
+                break
+            else:
+                sleep(1)
         # Now check to see if adc_data_collect needs to be started.
         if subprocess.run(check_data_cmd, stdout=subprocess.DEVNULL).returncode != 0:
             # Non-zero exit, adc_data_collect needs to be started
