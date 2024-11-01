@@ -5,6 +5,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 import struct
 import datetime
+from datetime import UTC
 import os.path
 from os import listdir, rename
 import threading
@@ -31,7 +32,7 @@ def write_file(start_time, bytes_data):
             last_gps = f.read()
         last_gps_split = last_gps.split('_')
         try:
-            last_gps_time_offset = (datetime.datetime.now(UTC) - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S')).total_seconds()
+            last_gps_time_offset = (datetime.datetime.now(UTC) - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=UTC)).total_seconds()
         except ValueError:
             last_gps_time_offset = 0
         last_gps_split[-1] = f'{last_gps_time_offset:.2f}'
@@ -55,7 +56,7 @@ for file in reversed(sorted(listdir(save_path))):
     except Exception as e:
         print(str(e))
         continue
-    if this_file_dt + datetime.timedelta(seconds=mins_before_write*60) > datetime.datetime.now(UTC) - datetime.timedelta(seconds=mins_before_write*60+30):
+    if this_file_dt.replace(tzinfo=UTC) + datetime.timedelta(seconds=mins_before_write*60) > datetime.datetime.now(UTC) - datetime.timedelta(seconds=mins_before_write*60+30):
         write_success = True
         break
 bytes_before_write = 5400000*mins_before_write
