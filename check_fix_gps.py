@@ -56,7 +56,7 @@ while True:
     if last_sentence is not None:
         if last_sentence.time == sentence.time:
             # If the time of the last sentence as over one minute ago, flash the GPS status light at once per 1/4 sec
-            if (datetime.datetime.now(UTC) - datetime.datetime.strptime(sentence.time[:-5], '%Y-%m-%dT%H:%M:%S')).total_seconds() >= 60:
+            if (datetime.datetime.now(UTC) - datetime.datetime.strptime(sentence.time[:-5], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=UTC)).total_seconds() >= 120:
                 GPIO.output(26, not GPIO.input(26))
                 alt = '2Donly'
             # Wait 1/4 sec before trying again for a new packet
@@ -72,7 +72,7 @@ while True:
             alt = sentence.alt
         # Grab the received time and convert to a python datetime object
         sentence_time_str = sentence.time[:-5]
-        sentence_time = datetime.datetime.strptime(sentence_time_str, '%Y-%m-%dT%H:%M:%S')
+        sentence_time = datetime.datetime.strptime(sentence_time_str, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=UTC)
         current_time = datetime.datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
         print(f'[{current_time}] GPS packet: {lat}, {lon}, {alt}, {sentence_time_str}, updating clock')
         with open('/home/pi/Desktop/last_gps.txt', 'w') as f:
@@ -85,6 +85,7 @@ while True:
             if chrony_out.startswith('#*'):
                 break
             else:
+                GPIO.output(26, not GPIO.input(26))
                 sleep(1)
         # Now check to see if adc_data_collect needs to be started.
         if subprocess.run(check_data_cmd, stdout=subprocess.DEVNULL).returncode != 0:
@@ -116,4 +117,4 @@ while True:
         else:
             # ADC data collect already running
             GPIO.output(26, GPIO.HIGH)
-    sleep(0.25)
+    sleep(5)
