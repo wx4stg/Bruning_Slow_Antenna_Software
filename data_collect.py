@@ -5,8 +5,9 @@ import numpy as np
 #import matplotlib.pyplot as plt
 import struct
 import datetime
+from datetime import UTC
 import os.path
-from os import listdir, rename
+from os import listdir, rename, system
 import threading
 import atexit
 
@@ -31,14 +32,17 @@ def write_file(start_time, bytes_data):
             last_gps = f.read()
         last_gps_split = last_gps.split('_')
         try:
-            last_gps_time_offset = (datetime.datetime.now(UTC) - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S')).total_seconds()
+            last_gps_time_offset = (datetime.datetime.now(UTC) - datetime.datetime.strptime(last_gps_split[-1], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=UTC)).total_seconds()
         except ValueError:
             last_gps_time_offset = 0
         last_gps_split[-1] = f'{last_gps_time_offset:.2f}'
         last_gps = '_'.join(last_gps_split)
     name = os.path.join(save_path, f'{start_time.strftime("%Y%m%d_%H%M%S_%f")}_{last_gps}_{cpu_id}_{use_relay}.raw')
-    with open(name, mode='wb') as file:
-        file.write(bytes_data)
+    try:
+        with open(name, mode='wb') as file:
+            file.write(bytes_data)
+    except OSError as e:
+        system('sudo shutdown -h now')
     write_success = True
     print(f'[{datetime.datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")}] Data collect wrote file: {name}')
 
@@ -55,7 +59,7 @@ for file in reversed(sorted(listdir(save_path))):
     except Exception as e:
         print(str(e))
         continue
-    if this_file_dt + datetime.timedelta(seconds=mins_before_write*60) > datetime.datetime.now(UTC) - datetime.timedelta(seconds=mins_before_write*60+30):
+    if this_file_dt.replace(tzinfo=UTC) + datetime.timedelta(seconds=mins_before_write*60) > datetime.datetime.now(UTC) - datetime.timedelta(seconds=mins_before_write*60+30):
         write_success = True
         break
 bytes_before_write = 5400000*mins_before_write
