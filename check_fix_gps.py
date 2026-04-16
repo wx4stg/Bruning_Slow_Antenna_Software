@@ -75,7 +75,7 @@ while True:
         # This file needs to be written atomically since data_collect might be reading it at the same time
         # See https://github.com/wx4stg/Bruning_Slow_Antenna_Software/issues/3 for more details
         with atomic_write('/home/pi/Desktop/last_gps.txt', overwrite=True) as f:
-            f.write(f'{lat:.3f}_{lon:.3f}_{alt}_{sentence_time_str}')
+            f.write(f'{lat:.6f}_{lon:.6f}_{alt}_{sentence_time_str}')
         # Check to make sure chrony is using PPS as a source for time updates
         while True:
             chrony_task = subprocess.Popen(chrony_cmd, stdout=subprocess.PIPE)
