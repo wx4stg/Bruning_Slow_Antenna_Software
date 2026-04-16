@@ -2,9 +2,6 @@
 # Monitor the GPS and time sync of the slow antenna
 # Created 25 January 2024 by Sam Gardner <samuel.gardner@ttu.edu>
 
-import sys
-import errno
-import json
 from time import sleep
 import datetime
 from datetime import UTC
@@ -12,6 +9,7 @@ import RPi.GPIO as GPIO
 import subprocess
 import gpsd
 import atexit
+from atomicwrites import atomic_write
 
 def exit_handler():
     GPIO.output(26, GPIO.LOW)
@@ -25,7 +23,7 @@ current_time = datetime.datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
 print(f'[{current_time}] Starting scheduled GPS fix...')
 
 
-with open('/home/pi/Desktop/last_gps.txt', 'w') as f:
+with atomic_write('/home/pi/Desktop/last_gps.txt', overwrite=True) as f:
     f.write('NO_FIX_2Donly_NaT')
 
 GPIO.setmode(GPIO.BCM)
@@ -46,7 +44,6 @@ start_data_cmd = ['systemctl', 'start', 'adc_data_collect']
 # Loop indefinitely
 while True:
     current_time = datetime.datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
-
     # Get latest NMEA sentence from gpsd
     sentence = gpsd.get_current()
     # Sometimes there can be sentences with empty time data -- filter these out:
@@ -75,7 +72,9 @@ while True:
         sentence_time = datetime.datetime.strptime(sentence_time_str, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=UTC)
         current_time = datetime.datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S.%f')
         print(f'[{current_time}] GPS packet: {lat}, {lon}, {alt}, {sentence_time_str}, updating clock')
-        with open('/home/pi/Desktop/last_gps.txt', 'w') as f:
+        # This file needs to be written atomically since data_collect might be reading it at the same time
+        # See https://github.com/wx4stg/Bruning_Slow_Antenna_Software/issues/3 for more details
+        with atomic_write('/home/pi/Desktop/last_gps.txt', overwrite=True) as f:
             f.write(f'{lat:.3f}_{lon:.3f}_{alt}_{sentence_time_str}')
         # Check to make sure chrony is using PPS as a source for time updates
         while True:
