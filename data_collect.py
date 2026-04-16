@@ -16,7 +16,7 @@ def exit_handler():
 
 atexit.register(exit_handler)
 
-use_relay = 'a'
+use_relay = 'b'
 mins_before_write = 1
 save_path ='/home/pi/Desktop/DATA/' 
 
